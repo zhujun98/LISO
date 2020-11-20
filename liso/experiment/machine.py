@@ -122,21 +122,35 @@ class _DoocsReader:
         return await _machine_event_loop.run_in_executor(
             executor, pydoocs_read, address)
 
-    async def read_channels(self, addresses, *, executor=None, attempts=3):
+    async def read_channels(self, addresses, *,
+                            min_id=None, executor=None, timeout):
+
+        _SENTINEL = object()
+
         future_ret = {asyncio.create_task(
             self._read_channel(address, executor=executor)): address
             for address in addresses}
+        future_ret[asyncio.create_task(asyncio.sleep(timeout))] = _SENTINEL
 
         ret = dict()
-        for i in range(attempts):
+        running = True
+        while running:
             done, _ = await asyncio.wait(future_ret)
 
             for task in done:
                 address = future_ret[task]
                 data = self._get_result(address, task)
+
+                if address is _SENTINEL:
+                    running = False
+                    continue
+
                 if data is not None:
                     ret[address] = data
-                else:
+                    if min_id is not None and data['macropulse'] < min_id:
+                        data = None
+
+                if data is None:
                     future_ret[asyncio.create_task(self._read_channel(
                         address, executor=executor))] = address
                 del future_ret[task]
@@ -212,7 +226,7 @@ class _DoocsReader:
                                 continue
 
                             no_event_data = await self.read_channels(
-                                self._no_event)
+                                self._no_event, min_id=pid, timeout=timeout)
                             for ne_addr, ne_item in no_event_data.items():
                                 correlated[ne_addr] = ne_item['data']
 

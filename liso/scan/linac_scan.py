@@ -374,7 +374,7 @@ class MachineScan(_BaseScan):
                     idx, controls, diagnostics = self._machine.write_and_read(
                         executor=executor,
                         mapping=mapping,
-                        timeout=timeout,
+                        timeout=timeout
                     )
                     writer.write(idx, controls, diagnostics)
                 except LisoRuntimeError as e:
